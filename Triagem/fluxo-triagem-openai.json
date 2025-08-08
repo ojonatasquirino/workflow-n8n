@@ -1,0 +1,266 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "triagem-whatsapp",
+        "options": {},
+        "responseMode": "onReceived"
+      },
+      "id": "1",
+      "name": "Webhook WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "phone", "value": "={{$json.body.phone}}" },
+            { "name": "message", "value": "={{$json.body.message}}" }
+          ]
+        },
+        "options": {},
+        "name": "Extrair Dados"
+      },
+      "id": "10",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "create",
+        "model": "gpt-4",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Você é um atendente virtual de uma clínica médica. Analise a mensagem recebida e classifique a intenção do paciente. No final da resposta, adicione uma tag entre colchetes com a intenção detectada. Ex: [AGENDAMENTO], [CANCELAMENTO], [DUVIDA], [EXAME], [OUTRO]"
+          },
+          { "role": "user", "content": "={{$json.message}}" }
+        ]
+      },
+      "id": "2",
+      "name": "ChatGPT - Classificar Intenção",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 3,
+      "position": [700, 300],
+      "credentials": { "openAiApi": "openai-api-key" }
+    },
+    {
+      "parameters": {
+        "functionCode": "const content = $json.choices[0].message.content || '';\nconst match = content.match(/\\[(AGENDAMENTO|CANCELAMENTO|DUVIDA|EXAME|OUTRO)\\]/i);\nconst intent = match ? match[1].toUpperCase() : 'OUTRO';\nreturn [{json: {intent, response: content, phone: $json.phone}}];"
+      },
+      "id": "3",
+      "name": "Extrair Intenção",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{$json.intent}}", "value2": "AGENDAMENTO" }]
+        }
+      },
+      "id": "4",
+      "name": "É Agendamento?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{$json.intent}}", "value2": "CANCELAMENTO" }
+          ]
+        }
+      },
+      "id": "5",
+      "name": "É Cancelamento?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 260]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{$json.intent}}", "value2": "DUVIDA" }]
+        }
+      },
+      "id": "6",
+      "name": "É Dúvida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{$json.intent}}", "value2": "EXAME" }]
+        }
+      },
+      "id": "11",
+      "name": "É Exame?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 540]
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            {
+              "name": "message",
+              "value": "Vamos iniciar o processo de agendamento. Por favor, informe a especialidade desejada e melhor horário."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7",
+      "name": "Mensagem Agendamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1300, 100]
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            {
+              "name": "message",
+              "value": "Você deseja cancelar qual consulta? Envie a data e nome do profissional."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8",
+      "name": "Mensagem Cancelamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1300, 260]
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            { "name": "message", "value": "={{$json.response}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9",
+      "name": "Resposta Dúvida (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1300, 420]
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            {
+              "name": "message",
+              "value": "Em breve você receberá os documentos solicitados ou instruções sobre seu exame."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "12",
+      "name": "Mensagem Exame",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1300, 560]
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            {
+              "name": "message",
+              "value": "Desculpe, não consegui entender sua solicitação. Poderia reformular sua mensagem?"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "13",
+      "name": "Mensagem Genérica",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1300, 700]
+    }
+  ],
+  "connections": {
+    "Webhook WhatsApp": {
+      "main": [[{ "node": "Extrair Dados", "type": "main", "index": 0 }]]
+    },
+    "Extrair Dados": {
+      "main": [
+        [
+          {
+            "node": "ChatGPT - Classificar Intenção",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ChatGPT - Classificar Intenção": {
+      "main": [[{ "node": "Extrair Intenção", "type": "main", "index": 0 }]]
+    },
+    "Extrair Intenção": {
+      "main": [
+        [
+          { "node": "É Agendamento?", "type": "main", "index": 0 },
+          { "node": "É Cancelamento?", "type": "main", "index": 0 },
+          { "node": "É Dúvida?", "type": "main", "index": 0 },
+          { "node": "É Exame?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "É Agendamento?": {
+      "main": [
+        [{ "node": "Mensagem Agendamento", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "É Cancelamento?": {
+      "main": [
+        [{ "node": "Mensagem Cancelamento", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "É Dúvida?": {
+      "main": [
+        [{ "node": "Resposta Dúvida (OpenAI)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "É Exame?": {
+      "main": [[{ "node": "Mensagem Exame", "type": "main", "index": 0 }], []],
+      "else": [{ "node": "Mensagem Genérica", "type": "main", "index": 0 }]
+    }
+  }
+}
