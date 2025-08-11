@@ -1,0 +1,128 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agendamento-consulta",
+        "options": {},
+        "responseMode": "onReceived"
+      },
+      "id": "1",
+      "name": "Webhook Agendamento",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "nome", "value": "={{$json.body.nome}}" },
+            { "name": "telefone", "value": "={{$json.body.telefone}}" },
+            { "name": "data", "value": "={{$json.body.data}}" },
+            { "name": "hora", "value": "={{$json.body.hora}}" },
+            {
+              "name": "especialidade",
+              "value": "={{$json.body.especialidade}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2",
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "calendar": "primary",
+        "start": {
+          "dateTime": "={{$json.data}}T{{$json.hora}}:00",
+          "timeZone": "America/Sao_Paulo"
+        },
+        "end": {
+          "dateTime": "={{$json.data}}T{{ ( () => { const h = parseInt($json.hora.split(':')[0]); const m = $json.hora.split(':')[1]; return String(h+1).padStart(2,'0')+':'+m })() }}:00",
+          "timeZone": "America/Sao_Paulo"
+        },
+        "summary": "Consulta: {{$json.especialidade}} - {{$json.nome}}",
+        "description": "Paciente: {{$json.nome}}\\nEspecialidade: {{$json.especialidade}}\\nTelefone: {{$json.telefone}}"
+      },
+      "id": "3",
+      "name": "Google Calendar - Criar Evento",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 3,
+      "position": [700, 300],
+      "credentials": { "googleApi": "google-calendar-credentials" }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": "YOUR_SHEET_ID",
+        "range": "Agendamentos!A:E",
+        "options": {},
+        "fields": "nome,telefone,data,hora,especialidade"
+      },
+      "id": "4",
+      "name": "Google Sheets - Salvar Backup",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [900, 300],
+      "credentials": { "googleApi": "google-sheets-credentials" }
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.telefone}}" },
+            {
+              "name": "message",
+              "value": "Consulta confirmada para {{$json.data}} às {{$json.hora}} com especialidade {{$json.especialidade}}."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5",
+      "name": "Enviar Confirmação WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Agendamento": {
+      "main": [[{ "node": "Extrair Dados", "type": "main", "index": 0 }]]
+    },
+    "Extrair Dados": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar - Criar Evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Criar Evento": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Salvar Backup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Salvar Backup": {
+      "main": [
+        [{ "node": "Enviar Confirmação WhatsApp", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}
