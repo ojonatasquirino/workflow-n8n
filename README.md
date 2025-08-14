@@ -86,7 +86,7 @@ Cada fluxo neste repositório foi projetado de forma **modular**, para facilitar
 - Testes e debugging mais simples.
 - Redução do risco de falhas que afetem o atendimento completo.
 
-No entanto, também incluímos o fluxo `fluxo-agente-completo.json`, que integra todos os módulos em um único agente, ideal para produção se você já estiver confiante com o sistema.
+No entanto, também inclui o fluxo `fluxo-agente-completo.json`, que integra todos os módulos em um único agente, ideal para produção se você já estiver confiante com o sistema.
 
 Sinta-se livre para usar os módulos separadamente ou unificar conforme seu cenário.
 
