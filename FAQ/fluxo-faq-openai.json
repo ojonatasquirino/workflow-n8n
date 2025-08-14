@@ -1,0 +1,89 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "faq-openai",
+        "options": {},
+        "responseMode": "onReceived"
+      },
+      "id": "1",
+      "name": "Webhook FAQ WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "phone", "value": "={{$json.body.phone}}" },
+            { "name": "question", "value": "={{$json.body.message}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2",
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "create",
+        "model": "gpt-4",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Você é um atendente virtual de uma clínica médica. Responda dúvidas comuns de pacientes com informações claras, objetivas e humanizadas. Se a pergunta não estiver relacionada a serviços médicos, oriente o paciente a reformular a dúvida."
+          },
+          { "role": "user", "content": "={{$json.question}}" }
+        ]
+      },
+      "id": "3",
+      "name": "OpenAI - Resposta FAQ",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 3,
+      "position": [700, 300],
+      "credentials": { "openAiApi": "openai-api-key" }
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            {
+              "name": "message",
+              "value": "={{$json.choices[0].message.content}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4",
+      "name": "Enviar Resposta WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook FAQ WhatsApp": {
+      "main": [[{ "node": "Extrair Dados", "type": "main", "index": 0 }]]
+    },
+    "Extrair Dados": {
+      "main": [
+        [{ "node": "OpenAI - Resposta FAQ", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenAI - Resposta FAQ": {
+      "main": [
+        [{ "node": "Enviar Resposta WhatsApp", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}
