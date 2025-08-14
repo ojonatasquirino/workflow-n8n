@@ -1,0 +1,86 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "envio-documentos",
+        "options": {},
+        "responseMode": "onReceived"
+      },
+      "id": "1",
+      "name": "Webhook Envio Documentos",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "phone", "value": "={{$json.body.phone}}" },
+            { "name": "documentName", "value": "={{$json.body.documentName}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2",
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "query": "={{$json.documentName}}",
+        "options": { "pageSize": 1 }
+      },
+      "id": "3",
+      "name": "Google Drive - Buscar Documento",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [700, 300],
+      "credentials": { "googleApi": "google-drive-credentials" }
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            {
+              "name": "message",
+              "value": "={{$json.files[0].webViewLink || 'Documento não encontrado.'}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4",
+      "name": "Enviar Link WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Envio Documentos": {
+      "main": [[{ "node": "Extrair Dados", "type": "main", "index": 0 }]]
+    },
+    "Extrair Dados": {
+      "main": [
+        [
+          {
+            "node": "Google Drive - Buscar Documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive - Buscar Documento": {
+      "main": [[{ "node": "Enviar Link WhatsApp", "type": "main", "index": 0 }]]
+    }
+  }
+}
