@@ -1,0 +1,93 @@
+{
+  "nodes": [
+    {
+      "parameters": { "triggerTimes": [{ "hour": 8, "minute": 0 }] },
+      "id": "1",
+      "name": "Cron Lembretes",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "calendar": "primary",
+        "options": {
+          "timeMin": "={{ new Date().toISOString() }}",
+          "timeMax": "={{ (() => { const now = new Date(); now.setDate(now.getDate() + 1); return now.toISOString(); })() }}"
+        },
+        "filters": {}
+      },
+      "id": "2",
+      "name": "Google Calendar - Consultas 24h",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 3,
+      "position": [500, 300],
+      "credentials": { "googleApi": "google-calendar-credentials" }
+    },
+    {
+      "parameters": { "fieldToSplitOut": "items" },
+      "id": "3",
+      "name": "Split por Evento",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const start = new Date($json.start.dateTime || $json.start.date);\nconst data = start.toLocaleDateString('pt-BR');\nconst hora = start.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});\nreturn [{json:{\n  telefone: $json.description?.match(/\\d{10,11}/)?.[0] || '',\n  nome: $json.summary?.replace('Consulta: ', '') || 'Paciente',\n  data,\n  hora\n}}];"
+      },
+      "id": "4",
+      "name": "Extrair Dados Paciente",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.telefone}}" },
+            {
+              "name": "message",
+              "value": "Olá {{$json.nome}}, lembramos que sua consulta está marcada para {{$json.data}} às {{$json.hora}}. Caso precise reagendar, entre em contato conosco."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5",
+      "name": "Enviar Lembrete WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    }
+  ],
+  "connections": {
+    "Cron Lembretes": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar - Consultas 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Consultas 24h": {
+      "main": [[{ "node": "Split por Evento", "type": "main", "index": 0 }]]
+    },
+    "Split por Evento": {
+      "main": [
+        [{ "node": "Extrair Dados Paciente", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extrair Dados Paciente": {
+      "main": [
+        [{ "node": "Enviar Lembrete WhatsApp", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}
