@@ -1,0 +1,322 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agente-completo",
+        "options": {},
+        "responseMode": "onReceived"
+      },
+      "id": "1",
+      "name": "Webhook Principal",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "phone", "value": "={{$json.body.phone}}" },
+            { "name": "message", "value": "={{$json.body.message}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2",
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "create",
+        "model": "gpt-4",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Você é um atendente virtual de clínica médica. Analise a mensagem e classifique a intenção: [AGENDAMENTO], [CANCELAMENTO], [DUVIDA], [EXAME], [DOCUMENTO], [OUTRO]. Responda no formato: Texto de resposta ao paciente + intenção entre colchetes no final."
+          },
+          { "role": "user", "content": "={{$json.message}}" }
+        ]
+      },
+      "id": "3",
+      "name": "Classificar Intenção (OpenAI)",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 3,
+      "position": [700, 300],
+      "credentials": { "openAiApi": "openai-api-key" }
+    },
+    {
+      "parameters": {
+        "functionCode": "const content = $json.choices[0].message.content || '';\nconst match = content.match(/\\[(AGENDAMENTO|CANCELAMENTO|DUVIDA|EXAME|DOCUMENTO|OUTRO)\\]/i);\nconst intent = match ? match[1].toUpperCase() : 'OUTRO';\nreturn [{json: {intent, response: content, phone: $json.phone, message: $json.message}}];"
+      },
+      "id": "4",
+      "name": "Extrair Intenção",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": { "propertyName": "intent" },
+      "id": "5",
+      "name": "Switch Intenção",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "calendar": "primary",
+        "start": {
+          "dateTime": "={{$json.data}}T{{$json.hora}}:00",
+          "timeZone": "America/Sao_Paulo"
+        },
+        "end": {
+          "dateTime": "={{(() => { const h=parseInt($json.hora.split(':')[0]); const m=$json.hora.split(':')[1]; return String(h+1).padStart(2,'0')+':'+m })()}}:00",
+          "timeZone": "America/Sao_Paulo"
+        },
+        "summary": "Consulta: {{$json.nome}}",
+        "description": "Paciente: {{$json.nome}} - Especialidade: {{$json.especialidade}} - Telefone: {{$json.phone}}"
+      },
+      "id": "6",
+      "name": "Google Calendar - Agendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 3,
+      "position": [1400, 160],
+      "credentials": { "googleApi": "google-calendar-credentials" }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": "YOUR_SHEET_ID",
+        "range": "Agendamentos!A:E",
+        "fields": "nome,telefone,data,hora,especialidade"
+      },
+      "id": "7",
+      "name": "Salvar no Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [1600, 160],
+      "credentials": { "googleApi": "google-sheets-credentials" }
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            {
+              "name": "message",
+              "value": "Consulta confirmada para {{$json.data}} às {{$json.hora}}."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8",
+      "name": "Confirmar Agendamento WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1800, 160]
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            { "name": "message", "value": "={{$json.response}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9",
+      "name": "Responder FAQ (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1400, 300]
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "query": "={{$json.documentName}}",
+        "options": { "pageSize": 1 }
+      },
+      "id": "10",
+      "name": "Google Drive - Buscar Documento",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [1400, 440],
+      "credentials": { "googleApi": "google-drive-credentials" }
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.phone}}" },
+            {
+              "name": "message",
+              "value": "={{$json.files[0].webViewLink || 'Documento não encontrado.'}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11",
+      "name": "Enviar Documento WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1600, 440]
+    },
+    {
+      "parameters": { "triggerTimes": [{ "hour": 8, "minute": 0 }] },
+      "id": "12",
+      "name": "Cron Lembretes",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [300, 700]
+    },
+    {
+      "parameters": {
+        "calendar": "primary",
+        "options": {
+          "timeMin": "={{ new Date().toISOString() }}",
+          "timeMax": "={{(() => { const now = new Date(); now.setDate(now.getDate() + 1); return now.toISOString(); })() }}"
+        },
+        "filters": {}
+      },
+      "id": "13",
+      "name": "Google Calendar - Consultas 24h",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 3,
+      "position": [500, 700],
+      "credentials": { "googleApi": "google-calendar-credentials" }
+    },
+    {
+      "parameters": { "fieldToSplitOut": "items" },
+      "id": "14",
+      "name": "Split Eventos",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [700, 700]
+    },
+    {
+      "parameters": {
+        "functionCode": "const start = new Date($json.start.dateTime || $json.start.date);\nconst data = start.toLocaleDateString('pt-BR');\nconst hora = start.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});\nreturn [{json:{\n  telefone: $json.description?.match(/\\d{10,11}/)?.[0] || '',\n  nome: $json.summary?.replace('Consulta: ', '') || 'Paciente',\n  data,\n  hora\n}}];"
+      },
+      "id": "15",
+      "name": "Extrair Dados Paciente",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 700]
+    },
+    {
+      "parameters": {
+        "url": "https://api.z-api.io/instances/YOUR_INSTANCE/token/YOUR_TOKEN/send-message",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": [
+            { "name": "phone", "value": "={{$json.telefone}}" },
+            {
+              "name": "message",
+              "value": "Olá {{$json.nome}}, lembramos que sua consulta está marcada para {{$json.data}} às {{$json.hora}}. Caso precise reagendar, entre em contato conosco."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "16",
+      "name": "Enviar Lembrete WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1100, 700]
+    }
+  ],
+  "connections": {
+    "Webhook Principal": {
+      "main": [[{ "node": "Extrair Dados", "type": "main", "index": 0 }]]
+    },
+    "Extrair Dados": {
+      "main": [
+        [
+          {
+            "node": "Classificar Intenção (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classificar Intenção (OpenAI)": {
+      "main": [[{ "node": "Extrair Intenção", "type": "main", "index": 0 }]]
+    },
+    "Extrair Intenção": {
+      "main": [[{ "node": "Switch Intenção", "type": "main", "index": 0 }]]
+    },
+    "Switch Intenção": {
+      "main": [
+        [{ "node": "Google Calendar - Agendar", "type": "main", "index": 0 }],
+        [{ "node": "Responder FAQ (OpenAI)", "type": "main", "index": 0 }],
+        [
+          {
+            "node": "Google Drive - Buscar Documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Agendar": {
+      "main": [
+        [{ "node": "Salvar no Google Sheets", "type": "main", "index": 0 }]
+      ]
+    },
+    "Salvar no Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Confirmar Agendamento WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Drive - Buscar Documento": {
+      "main": [
+        [{ "node": "Enviar Documento WhatsApp", "type": "main", "index": 0 }]
+      ]
+    },
+    "Cron Lembretes": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar - Consultas 24h",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Consultas 24h": {
+      "main": [[{ "node": "Split Eventos", "type": "main", "index": 0 }]]
+    },
+    "Split Eventos": {
+      "main": [
+        [{ "node": "Extrair Dados Paciente", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extrair Dados Paciente": {
+      "main": [
+        [{ "node": "Enviar Lembrete WhatsApp", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}
